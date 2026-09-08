@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planificador Universal de Turnos y Guardias</title>
+  <meta name="description" content="Sistema universal y configurable de gestión de turnos rotativos. Soporta cualquier duración de turno, cualquier número de personal y reemplazos parciales.">
+  <link rel="icon" href="horas-laborales.ico" type="image/png">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-dark">
+  <div class="app-container">
+
+    <!-- HEADER -->
+    <header class="main-header">
+      <div class="header-left">
+        <div class="brand-logo">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <div class="brand-info">
+          <h1>Soporte TPG &bull; Sistema de Horarios</h1>
+          <p class="subtitle" id="headerSubtitle">Gestión de Turnos Rotativos 24/7 &bull; Control de Reemplazos y Otros TPG</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="openConfigBtn" class="btn btn-secondary" title="Configurar el sistema">
+          <i class="fa-solid fa-sliders"></i> <span>Configurar Sistema</span>
+        </button>
+        <button id="printBtn" class="btn btn-primary" title="Imprimir o guardar PDF">
+          <i class="fa-solid fa-print"></i> <span>Imprimir / PDF</span>
+        </button>
+        <button id="themeToggleBtn" class="btn-icon" title="Cambiar tema claro/oscuro">
+          <i class="fa-solid fa-circle-half-stroke"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTROL PANEL & NAV -->
+    <section class="controls-card">
+
+      <!-- Patio selector (megasistema multi-patio) -->
+      <div class="yard-bar">
+        <span class="yard-bar-label"><i class="fa-solid fa-warehouse"></i> Patio:</span>
+        <div class="yard-pills" id="yardPills"></div>
+        <button id="manageYardsBtn" class="btn btn-outline btn-sm" title="Activar o desactivar patios">
+          <i class="fa-solid fa-gear"></i> Gestionar Patios
+        </button>
+      </div>
+
+      <div class="controls-row">
+
+        <!-- Period Selector -->
+        <div class="control-group">
+          <label for="selectMonth"><i class="fa-regular fa-calendar"></i> Mes:</label>
+          <select id="selectMonth" class="form-select">
+            <option value="0">Enero</option>
+            <option value="1">Febrero</option>
+            <option value="2">Marzo</option>
+            <option value="3">Abril</option>
+            <option value="4">Mayo</option>
+            <option value="5">Junio</option>
+            <option value="6">Julio</option>
+            <option value="7">Agosto</option>
+            <option value="8" selected>Septiembre</option>
+            <option value="9">Octubre</option>
+            <option value="10">Noviembre</option>
+            <option value="11">Diciembre</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="selectYear"><i class="fa-regular fa-calendar-check"></i> Año:</label>
+          <div class="year-nav-wrapper">
+            <button id="prevYearBtn" class="btn-step" title="Año Anterior"><i class="fa-solid fa-chevron-left"></i></button>
+            <select id="selectYear" class="form-select"></select>
+            <button id="nextYearBtn" class="btn-step" title="Año Siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+
+        <div class="control-group filter-tech">
+          <label for="filterTechnician"><i class="fa-solid fa-user-shield"></i> Filtrar:</label>
+          <select id="filterTechnician" class="form-select">
+            <option value="ALL">👥 Todos</option>
+          </select>
+        </div>
+
+        <div class="quick-nav-actions">
+          <button id="todayBtn" class="btn btn-outline" title="Ir al Mes Actual">
+            <i class="fa-solid fa-bullseye"></i> Hoy
+          </button>
+        </div>
+
+      </div>
+
+      <!-- VIEW TABS -->
+      <nav class="view-tabs" role="tablist">
+        <button class="tab-btn active" data-view="list" id="tabList">
+          <i class="fa-solid fa-table-list"></i> Vista Lista
+        </button>
+        <button class="tab-btn" data-view="calendar" id="tabCalendar">
+          <i class="fa-solid fa-calendar-week"></i> Calendario
+        </button>
+        <button class="tab-btn" data-view="matrix" id="tabMatrix">
+          <i class="fa-solid fa-table-cells"></i> Matriz
+        </button>
+        <button class="tab-btn" data-view="coverage" id="tabCoverage">
+          <i class="fa-solid fa-shield-halved"></i> Cobertura
+        </button>
+        <button class="tab-btn" data-view="annual" id="tabAnnual">
+          <i class="fa-solid fa-calendar-days"></i> Anual
+        </button>
+        <button class="tab-btn" data-view="swaps" id="tabSwaps">
+          <i class="fa-solid fa-arrow-right-arrow-left"></i> Cambios / Reemplazos
+          <span id="swapBadge" class="badge-count" style="display:none;">0</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- LEGEND & STATS (generated dynamically) -->
+    <section class="stats-and-legend">
+      <div class="legend-bar" id="dynamicLegend">
+        <!-- Populated by JS based on configured shifts -->
+      </div>
+      <div class="summary-cards" id="metricsContainer">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- MAIN VIEWS CONTAINER -->
+    <main class="content-view-area">
+
+      <!-- 1. LIST VIEW -->
+      <section id="viewList" class="view-panel active">
+        <div class="table-card">
+          <div class="card-toolbar">
+            <h2 id="listTitle">Horario: Septiembre 2026</h2>
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="listSearch" placeholder="Buscar fecha, turno o personal...">
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="schedule-table excel-style-table" id="excelTableView">
+              <thead>
+                <tr>
+                  <th style="width: 30%;">Fecha y Día</th>
+                  <th style="width: 22%;">Turno</th>
+                  <th style="width: 48%;">Personal Asignado</th>
+                </tr>
+              </thead>
+              <tbody id="excelTableBody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. MONTHLY CALENDAR VIEW -->
+      <section id="viewCalendar" class="view-panel">
+        <div class="calendar-card">
+          <div class="card-toolbar">
+            <h2 id="calendarTitle">Calendario: Septiembre 2026</h2>
+          </div>
+          <div class="calendar-grid">
+            <div class="calendar-weekdays">
+              <div>Lunes</div>
+              <div>Martes</div>
+              <div>Miércoles</div>
+              <div>Jueves</div>
+              <div>Viernes</div>
+              <div class="weekend-head">Sábado</div>
+              <div class="weekend-head">Domingo</div>
+            </div>
+            <div class="calendar-days-container" id="calendarDaysGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. MATRIX VIEW -->
+      <section id="viewMatrix" class="view-panel">
+        <div class="table-card">
+          <div class="card-toolbar">
+            <h2 id="matrixTitle">Matriz Mensual: Septiembre 2026</h2>
+          </div>
+          <div class="table-responsive">
+            <table class="schedule-table matrix-table" id="matrixTable">
+              <thead id="matrixHead"></thead>
+              <tbody id="matrixBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. COVERAGE VIEW -->
+      <section id="viewCoverage" class="view-panel">
+        <div class="table-card">
+          <div class="card-toolbar">
+            <h2 id="coverageTitle">Cobertura Mensual: Septiembre 2026</h2>
+            <p class="section-desc">Puestos cubiertos por turno por día. Importa saber que estén en su puesto, no quién es.</p>
+          </div>
+          <div class="table-responsive">
+            <table class="schedule-table coverage-table" id="coverageTable">
+              <thead id="coverageHead"></thead>
+              <tbody id="coverageBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. ANNUAL VIEW -->
+      <section id="viewAnnual" class="view-panel">
+        <div class="annual-container">
+          <div class="card-toolbar">
+            <h2 id="annualTitle">Resumen Anual: 2026</h2>
+            <p class="section-desc">Vista completa del año. Selecciona un técnico arriba para resaltar sus turnos.</p>
+          </div>
+          <div class="annual-grid" id="annualGridContainer"></div>
+        </div>
+      </section>
+
+      <!-- 6. SWAPS / REPLACEMENTS VIEW -->
+      <section id="viewSwaps" class="view-panel">
+        <div class="swap-manager-container">
+          <div class="swap-form-card">
+            <h3><i class="fa-solid fa-right-left"></i> Registrar Reemplazo o Cambio de Turno</h3>
+            <p class="subtitle">Registra cuando un titular es reemplazado, ya sea por otro compañero o por personal externo.</p>
+
+            <form id="swapForm" class="swap-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="swapDate"><i class="fa-regular fa-calendar"></i> Fecha del Reemplazo:</label>
+                  <input type="date" id="swapDate" class="form-input" required>
+                </div>
+                <div class="form-group">
+                  <label for="swapTechA"><i class="fa-solid fa-user-minus"></i> Titular a Reemplazar:</label>
+                  <select id="swapTechA" class="form-select" required></select>
+                </div>
+                <div class="form-group">
+                  <label for="swapTechB"><i class="fa-solid fa-user-plus"></i> Cubierto por:</label>
+                  <select id="swapTechB" class="form-select" required></select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex: 2;">
+                  <label for="swapReason"><i class="fa-solid fa-comment-dots"></i> Motivo / Detalle:</label>
+                  <input type="text" id="swapReason" class="form-input" placeholder="Ej: Vacaciones, Permiso médico, Apoyo de otra sede...">
+                </div>
+                <!-- Partial replacement fields -->
+                <div class="form-group">
+                  <label for="swapFromTime"><i class="fa-solid fa-clock"></i> Hora Inicio (parcial):</label>
+                  <input type="time" id="swapFromTime" class="form-input" placeholder="Dejar vacío = turno completo">
+                </div>
+                <div class="form-group">
+                  <label for="swapToTime"><i class="fa-solid fa-clock"></i> Hora Fin (parcial):</label>
+                  <input type="time" id="swapToTime" class="form-input">
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                  <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fa-solid fa-plus-circle"></i> Aplicar Reemplazo
+                  </button>
+                </div>
+              </div>
+              <p class="form-hint"><i class="fa-solid fa-circle-info"></i> Las horas inicio/fin son opcionales. Si las dejas vacías, se asume el turno completo.</p>
+            </form>
+          </div>
+
+          <div class="table-card" style="margin-top: 24px;">
+            <div class="card-toolbar">
+              <h3>Historial de Reemplazos Activos</h3>
+              <button id="clearAllSwapsBtn" class="btn btn-danger btn-sm">
+                <i class="fa-solid fa-trash"></i> Limpiar Todos
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="schedule-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Titular</th>
+                    <th>Cubierto Por</th>
+                    <th>Horario</th>
+                    <th>Motivo</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="swapsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ============================================================ -->
+    <!-- UNIVERSAL CONFIG MODAL (3 TABS)                               -->
+    <!-- ============================================================ -->
+    <div id="configModal" class="modal-backdrop">
+      <div class="modal-card modal-card-xl">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-sliders"></i> Configuración del Sistema de Turnos</h3>
+          <button class="modal-close" id="closeConfigModalBtn">&times;</button>
+        </div>
+
+        <!-- Modal Tab Bar -->
+        <div class="modal-tabs">
+          <button class="modal-tab-btn active" data-modal-tab="shifts">
+            <i class="fa-solid fa-clock"></i> Turnos
+          </button>
+          <button class="modal-tab-btn" data-modal-tab="staff">
+            <i class="fa-solid fa-users"></i> Personal
+          </button>
+          <button class="modal-tab-btn" data-modal-tab="rotation">
+            <i class="fa-solid fa-rotate"></i> Rotación
+          </button>
+        </div>
+
+        <div class="modal-body modal-scroll">
+
+          <!-- ===== TAB 1: SHIFTS ===== -->
+          <div class="modal-tab-panel active" id="panel-shifts">
+            <div class="config-section">
+              <h4 class="config-section-title">
+                <i class="fa-solid fa-clock"></i> Definir Turnos de Trabajo
+              </h4>
+              <p class="modal-note">
+                Crea todos los turnos que necesites: mañana, tarde, noche, 12 horas, 24 horas, etc. Cada turno tiene su propio color para identificarse fácilmente.
+              </p>
+
+              <!-- Add Shift Form -->
+              <div class="add-shift-form">
+                <div class="shift-form-row">
+                  <div class="form-group">
+                    <label>Nombre del Turno</label>
+                    <input type="text" id="newShiftName" class="form-input" placeholder="Ej: Mañana, Noche, 12H-A...">
+                  </div>
+                  <div class="form-group">
+                    <label>Hora Inicio</label>
+                    <input type="time" id="newShiftStart" class="form-input" value="07:00">
+                  </div>
+                  <div class="form-group">
+                    <label>Hora Fin</label>
+                    <input type="time" id="newShiftEnd" class="form-input" value="15:00">
+                  </div>
+                  <div class="form-group">
+                    <label>Color</label>
+                    <input type="color" id="newShiftColor" class="form-color" value="#4A9EFF">
+                  </div>
+                  <div class="form-group" style="align-self: flex-end;">
+                    <button id="addShiftBtn" class="btn btn-success" type="button">
+                      <i class="fa-solid fa-plus"></i> Agregar Turno
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Current Shifts List -->
+              <div id="shiftsList" class="shifts-list">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== TAB 2: STAFF ===== -->
+          <div class="modal-tab-panel" id="panel-staff">
+            <div class="config-section">
+              <h4 class="config-section-title">
+                <i class="fa-solid fa-user-shield"></i> Personal Titular
+              </h4>
+              <p class="modal-note">
+                Los titulares participan en el ciclo de rotación automática. Al agregar o quitar titulares, la grilla de rotación se ajusta automáticamente.
+              </p>
+              <div class="add-staff-box">
+                <input type="text" id="newPrimaryStaffInput" class="form-input" placeholder="Nombre del titular (ej: JUAN PÉREZ)">
+                <button id="addPrimaryStaffBtn" class="btn btn-success" type="button">
+                  <i class="fa-solid fa-plus"></i> Agregar Titular
+                </button>
+              </div>
+              <div id="primaryStaffList" class="staff-list"></div>
+            </div>
+
+            <hr class="modal-divider">
+
+            <div class="config-section">
+              <h4 class="config-section-title">
+                <i class="fa-solid fa-user-plus"></i> Personal de Reemplazo / Externo
+              </h4>
+              <p class="modal-note">
+                Personal que viene de otras sedes, contratistas o apoyos temporales. Aparecen en el formulario de reemplazos para asignarlos cuando sea necesario.
+              </p>
+              <div class="add-staff-box">
+                <input type="text" id="newExternalTechInput" class="form-input" placeholder="Ej: CARLOS - SEDE NORTE, CONTRATISTA 1...">
+                <button id="addExternalTechBtn" class="btn btn-success" type="button">
+                  <i class="fa-solid fa-plus"></i> Agregar Externo
+                </button>
+              </div>
+              <div id="externalTechsListContainer" class="staff-list"></div>
+            </div>
+          </div>
+
+          <!-- ===== TAB 3: ROTATION ===== -->
+          <div class="modal-tab-panel" id="panel-rotation">
+            <div class="config-section">
+              <h4 class="config-section-title">
+                <i class="fa-solid fa-rotate"></i> Patrón de Rotación
+              </h4>
+              <p class="modal-note">
+                Define cómo se planifica: fijo (el ciclo repite igual desde la fecha ancla) o mensual (cada mes calendario reinicia y se planifica por semanas; marca las semanas a trabajar, las demás salen libres). Haz clic en una celda para cambiar el turno asignado.
+              </p>
+
+              <!-- Modo de planificación -->
+              <div class="rotation-mode-row">
+                <label class="form-label"><i class="fa-solid fa-calendar-week"></i> Modo de planificación:</label>
+                <select id="rotationModeSelect" class="form-select" style="max-width: 360px;">
+                  <option value="fixed">Fijo — el ciclo repite igual (anual)</option>
+                  <option value="month">Mensual — plan por semanas del mes</option>
+                </select>
+              </div>
+
+              <div id="fixedModeControls" class="rotation-controls">
+                <div class="form-group">
+                  <label for="cycleLengthInput"><i class="fa-solid fa-repeat"></i> Días del Ciclo (longitud):</label>
+                  <div class="cycle-input-row">
+                    <input type="number" id="cycleLengthInput" class="form-input" min="1" max="60" value="8" style="width: 100px;">
+                    <button id="applyCycleLengthBtn" class="btn btn-outline btn-sm">
+                      <i class="fa-solid fa-check"></i> Aplicar
+                    </button>
+                  </div>
+                  <small class="form-hint-small">Ejemplos: 8 días (M/T/N x2 + 2 libre), 9 días (12H x3 + 3 libre + 3 libre), 3 días (24H + 2 libre)</small>
+                </div>
+                <div class="form-group">
+                  <label for="baseDateInput"><i class="fa-solid fa-calendar-star"></i> Fecha Ancla (Día 1 del Ciclo):</label>
+                  <input type="date" id="baseDateInput" class="form-input" style="width: 200px;">
+                  <small class="form-hint-small">Fecha de referencia desde donde comienza el Día 1 del ciclo para todos los titulares.</small>
+                </div>
+              </div>
+
+              <div id="monthModeControls" class="rotation-controls" style="display:none;">
+                <div class="form-group">
+                  <label><i class="fa-solid fa-check-double"></i> Semanas del mes (marca las que quieras planear):</label>
+                  <div class="month-week-checks" id="monthWeekChecks">
+                    <label class="month-week-check"><input type="checkbox" data-week="0" checked> <span>Semana 1</span></label>
+                    <label class="month-week-check"><input type="checkbox" data-week="1" checked> <span>Semana 2</span></label>
+                    <label class="month-week-check"><input type="checkbox" data-week="2" checked> <span>Semana 3</span></label>
+                    <label class="month-week-check"><input type="checkbox" data-week="3" checked> <span>Semana 4</span></label>
+                  </div>
+                  <small class="form-hint-small" id="monthModelHint"></small>
+                </div>
+              </div>
+
+              <!-- Rotation Builder Grid -->
+              <div class="rotation-builder-wrapper">
+                <div id="rotationBuilderGrid" class="rotation-builder-grid">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+              <div class="rotation-legend-note">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>Haz clic en cualquier celda para ciclar entre los turnos disponibles. <strong>LIBRE</strong> = día de descanso.</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /modal-body -->
+
+        <div class="modal-footer">
+          <button id="resetDefaultsBtn" class="btn btn-outline">
+            <i class="fa-solid fa-arrow-rotate-left"></i> Restablecer Valores
+          </button>
+          <button id="saveConfigBtn" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar Configuración
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PATIO MANAGEMENT MODAL                                        -->
+    <!-- ============================================================ -->
+    <div id="yardModal" class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-warehouse"></i> Gestión de Patios</h3>
+          <button class="modal-close" id="closeYardModalBtn">&times;</button>
+        </div>
+        <div class="modal-body modal-scroll">
+          <p class="modal-note" style="margin-bottom:16px;">
+            Cada patio es una instancia independiente: tiene su propia configuración de turnos, personal, rotación y cambios. Un técnico puede repetirse en varios patios. <strong>TPG1 es el sistema actual (HORARIOS1).</strong>
+          </p>
+          <div id="yardManageList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toastNotification" class="toast"></div>
+
+  </div><!-- /app-container -->
+
+  <script src="app.js"></script>
+</body>
+</html>
