@@ -263,8 +263,11 @@
                   <label for="swapToTime"><i class="fa-solid fa-clock"></i> Hora Fin (parcial):</label>
                   <input type="time" id="swapToTime" class="form-input">
                 </div>
-                <div class="form-group" style="align-self: flex-end;">
-                  <button type="submit" class="btn btn-primary btn-block">
+                <div class="form-group" style="align-self: flex-end; display: flex; align-items: center; gap: 8px;">
+                  <button type="button" id="swapCancelEditBtn" class="btn btn-outline" style="display:none;">
+                    <i class="fa-solid fa-xmark"></i> Cancelar
+                  </button>
+                  <button type="submit" id="swapSubmitBtn" class="btn btn-primary btn-block">
                     <i class="fa-solid fa-plus-circle"></i> Aplicar Reemplazo
                   </button>
                 </div>

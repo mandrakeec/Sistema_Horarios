@@ -679,6 +679,11 @@ body.theme-light .brand-info h1 {
   padding: 2px 8px; border-radius: 99px;
 }
 
+.swap-editing-row {
+  background: rgba(59,130,246,0.08);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
 /* --------------------------------------------------------------------------
    CONFIG MODAL
    -------------------------------------------------------------------------- */

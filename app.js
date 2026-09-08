@@ -163,6 +163,9 @@
     swaps: {}
   };
 
+  // Reemplazo/cambio en modo edición: { dateKey, person } o null
+  let swapEditing = null;
+
   // ==========================================
   // PERSISTENCIA (una instancia independiente por patio)
   // ==========================================
@@ -1400,8 +1403,10 @@
         const fromTime    = typeof swapData === 'object' ? swapData.fromTime : null;
         const toTime      = typeof swapData === 'object' ? swapData.toTime : null;
         const horario     = fromTime ? `${fromTime} – ${toTime}` : 'Turno completo';
+        const editing = swapEditing && swapEditing.dateKey === dateKey && swapEditing.person === origPerson;
 
         const row = document.createElement('tr');
+        if (editing) row.className = 'swap-editing-row';
         row.innerHTML = `
           <td>${dateKey}</td>
           <td><span class="tech-name">${origPerson}</span></td>
@@ -1409,6 +1414,9 @@
           <td><span class="partial-time-badge">${horario}</span></td>
           <td>${reason}</td>
           <td>
+            <button class="btn btn-outline btn-sm btn-edit-swap" data-date="${dateKey}" data-person="${origPerson}" title="Modificar reemplazo">
+              <i class="fa-solid fa-pen"></i>
+            </button>
             <button class="btn btn-danger btn-sm btn-delete-swap" data-date="${dateKey}" data-person="${origPerson}" title="Eliminar reemplazo">
               <i class="fa-solid fa-trash"></i>
             </button>
@@ -1417,6 +1425,44 @@
         tbody.appendChild(row);
       });
     });
+  }
+
+  function startSwapEdit(dateKey, person) {
+    const data = state.swaps[dateKey] && state.swaps[dateKey][person];
+    if (!data) return;
+    swapEditing = { dateKey, person };
+    document.getElementById('swapDate').value = dateKey;
+    const selA = document.getElementById('swapTechA');
+    if (selA && [...selA.options].some(o => o.value === person)) selA.value = person;
+    const selB = document.getElementById('swapTechB');
+    if (selB && [...selB.options].some(o => o.value === data.replacement)) selB.value = data.replacement;
+    document.getElementById('swapReason').value    = data.reason || '';
+    document.getElementById('swapFromTime').value  = data.fromTime || '';
+    document.getElementById('swapToTime').value    = data.toTime || '';
+    updateSwapFormMode(true);
+    renderSwapsHistory();
+    const heading = document.querySelector('.swap-form-card h3');
+    if (heading) heading.innerHTML = '<i class="fa-solid fa-pen"></i> Modificando Reemplazo de: ' + person;
+    showToast(`Editando el reemplazo de ${person}. Cambia lo necesario y pulsa Guardar Cambios.`);
+  }
+
+  function cancelSwapEdit() {
+    swapEditing = null;
+    updateSwapFormMode(false);
+    const heading = document.querySelector('.swap-form-card h3');
+    if (heading) heading.innerHTML = '<i class="fa-solid fa-right-left"></i> Registrar Reemplazo o Cambio de Turno';
+    renderSwapsHistory();
+    showToast('Edición cancelada.');
+  }
+
+  function updateSwapFormMode(editing) {
+    const btn       = document.getElementById('swapSubmitBtn');
+    const cancelBtn = document.getElementById('swapCancelEditBtn');
+    if (!btn || !cancelBtn) return;
+    btn.innerHTML = editing
+      ? '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios'
+      : '<i class="fa-solid fa-plus-circle"></i> Aplicar Reemplazo';
+    cancelBtn.style.display = editing ? 'inline-flex' : 'none';
   }
 
   // ==========================================
@@ -2338,22 +2384,55 @@
         showToast('Si ingresas hora de inicio parcial, debes ingresar hora de fin también.', 'error'); return;
       }
 
-      if (!state.swaps[dateKey]) state.swaps[dateKey] = {};
-      state.swaps[dateKey][origPerson] = { replacement, reason, fromTime: fromTime || null, toTime: toTime || null };
+      const data = { replacement, reason, fromTime: fromTime || null, toTime: toTime || null };
+
+      if (swapEditing) {
+        // MODIFICAR un reemplazo existente
+        const oldKey = swapEditing.dateKey, oldPerson = swapEditing.person;
+        if ((oldKey !== dateKey || oldPerson !== origPerson) &&
+            state.swaps[dateKey] && state.swaps[dateKey][origPerson]) {
+          showToast('Ya existe un reemplazo para esa fecha/titular. Usa el botón de modificar de esa fila.', 'error'); return;
+        }
+        if (oldKey !== dateKey || oldPerson !== origPerson) {
+          if (state.swaps[oldKey]) {
+            delete state.swaps[oldKey][oldPerson];
+            if (Object.keys(state.swaps[oldKey]).length === 0) delete state.swaps[oldKey];
+          }
+        }
+        if (!state.swaps[dateKey]) state.swaps[dateKey] = {};
+        state.swaps[dateKey][origPerson] = data;
+        swapEditing = null;
+        updateSwapFormMode(false);
+        showToast(`✅ Reemplazo actualizado para ${dateKey}.`);
+      } else {
+        // Registrar nuevo
+        if (state.swaps[dateKey] && state.swaps[dateKey][origPerson]) {
+          showToast('Ya existe un reemplazo para este día y titular. Pulsa el lápiz de esa fila para modificarlo.', 'error'); return;
+        }
+        if (!state.swaps[dateKey]) state.swaps[dateKey] = {};
+        state.swaps[dateKey][origPerson] = data;
+        showToast(`✅ Reemplazo registrado para ${dateKey}.`);
+      }
 
       saveConfig();
       populateTechSelects();
       renderAll();
-      showToast(`✅ Reemplazo registrado para ${dateKey}.`);
-
-      // Reset partial time fields
+      const heading = document.querySelector('.swap-form-card h3');
+      if (heading) heading.innerHTML = '<i class="fa-solid fa-right-left"></i> Registrar Reemplazo o Cambio de Turno';
+      document.getElementById('swapCancelEditBtn').style.display = 'none';
+      // Reset partial time + reason fields
       document.getElementById('swapFromTime').value = '';
       document.getElementById('swapToTime').value   = '';
       document.getElementById('swapReason').value   = '';
     });
 
-    // Swap delete (delegated)
+    // Swap edit (delegated)
     document.getElementById('swapsTableBody').addEventListener('click', e => {
+      const editBtn = e.target.closest('.btn-edit-swap');
+      if (editBtn) {
+        startSwapEdit(editBtn.dataset.date, editBtn.dataset.person);
+        return;
+      }
       const btn = e.target.closest('.btn-delete-swap');
       if (!btn) return;
       const dateKey = btn.dataset.date;
@@ -2362,10 +2441,17 @@
         delete state.swaps[dateKey][person];
         if (Object.keys(state.swaps[dateKey]).length === 0) delete state.swaps[dateKey];
       }
+      if (swapEditing && swapEditing.dateKey === dateKey && swapEditing.person === person) {
+        swapEditing = null;
+        updateSwapFormMode(false);
+      }
       saveConfig();
       renderAll();
       showToast('Reemplazo eliminado.');
     });
+
+    // Cancel swap edit
+    document.getElementById('swapCancelEditBtn').addEventListener('click', cancelSwapEdit);
 
     // Clear all swaps
     document.getElementById('clearAllSwapsBtn').addEventListener('click', () => {
