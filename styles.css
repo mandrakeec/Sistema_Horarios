@@ -1039,6 +1039,41 @@ body.theme-light .brand-info h1 {
   border: 1px solid rgba(59,130,246,0.3); padding: 2px 8px; border-radius: 999px;
 }
 
+/* Bloque "Nuevo patio" */
+.yard-add-block {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 14px; margin-top: 6px;
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  background: transparent;
+}
+.yard-add-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.yard-add-info strong { font-size: 0.9rem; color: var(--text-main); }
+.yard-add-info small { font-size: 0.75rem; color: var(--text-muted); line-height: 1.35; }
+.yard-add-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.yard-add-controls .form-input { width: 130px; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+
+/* Acciones por patio: mover / color / renombrar / eliminar */
+.yard-manage-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.yard-color-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0; border-radius: 50%;
+  border: 2px solid var(--bg-card); color: #fff; cursor: pointer;
+  font-size: 0.68rem; box-shadow: 0 1px 4px rgba(0,0,0,0.25); transition: transform 0.15s;
+}
+.yard-color-btn:hover { transform: scale(1.12); }
+.yard-color-wrap { position: relative; display: inline-flex; }
+.yard-color-input {
+  position: absolute; width: 0; height: 0; opacity: 0; border: none; padding: 0; pointer-events: none;
+}
+.yard-rename-input {
+  width: 110px; padding: 4px 8px; font-weight: 700; text-transform: uppercase;
+  font-size: 0.9rem; font-family: 'JetBrains Mono', monospace;
+  color: var(--text-main); background: var(--bg-card);
+  border: 1px solid var(--border-focus); border-radius: var(--radius-sm); outline: none;
+}
+.btn-delete-yard.btn-icon-sm:hover { color: var(--danger); border-color: var(--danger); background: rgba(239,68,68,0.08); }
+
 /* Toggle switch */
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
 .switch input { opacity: 0; width: 0; height: 0; }

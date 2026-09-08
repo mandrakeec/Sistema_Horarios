@@ -18,7 +18,7 @@
   const STORAGE_KEY       = 'univ_shift_planner_v3';
   const STORAGE_SWAPS_KEY = 'univ_shift_swaps_v3';
   const STORAGE_YARDS_KEY = 'univ_shift_yards_v3';
-  const YARD_IDS = ['TPG1', 'TPG2', 'TPG3', 'TPG4'];
+  let YARD_IDS = ['TPG1', 'TPG2', 'TPG3', 'TPG4'];
 
   // ==========================================
   // UTILIDADES
@@ -149,6 +149,7 @@
     // Patios (megasistema): cada uno es una instancia independiente
     yardsActive: { TPG1: true, TPG2: false, TPG3: false, TPG4: false },
     activeYard:  'TPG1',
+    yardColors: {},
     // Config del patio activo
     shifts:   [...defaultCfg.shifts],
     staff:    { primary: [...defaultCfg.staff.primary], external: [...defaultCfg.staff.external] },
@@ -232,9 +233,23 @@
       const raw = localStorage.getItem(STORAGE_YARDS_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.yards) && parsed.yards.length > 0) {
+        // Restaurar la lista completa de patios (incluye los creados por el usuario)
+        YARD_IDS = parsed.yards;
+        YARD_IDS.forEach(id => {
+          if (!(id in state.yardsActive)) state.yardsActive[id] = false;
+        });
+      }
       if (parsed && parsed.yardsActive) {
         YARD_IDS.forEach(id => {
           if (typeof parsed.yardsActive[id] === 'boolean') state.yardsActive[id] = parsed.yardsActive[id];
+        });
+      }
+      if (parsed && parsed.yardColors) {
+        YARD_IDS.forEach(id => {
+          if (typeof parsed.yardColors[id] === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.yardColors[id])) {
+            state.yardColors[id] = parsed.yardColors[id];
+          }
         });
       }
       if (parsed && parsed.activeYard &&
@@ -247,7 +262,9 @@
   function saveYardMeta() {
     try {
       localStorage.setItem(STORAGE_YARDS_KEY, JSON.stringify({
+        yards: YARD_IDS,
         yardsActive: state.yardsActive,
+        yardColors: state.yardColors,
         activeYard: state.activeYard
       }));
     } catch (e) { console.error('Error guardando patios:', e); }
@@ -339,7 +356,10 @@
       pill.dataset.yard = id;
       if (id === state.activeYard) pill.classList.add('active');
       if (!state.yardsActive[id]) pill.classList.add('inactive');
-      pill.innerHTML = `<i class="fa-solid fa-warehouse"></i> ${id}${id === state.activeYard ? ' <span class="yard-live-dot"></span>' : ''}`;
+      const color = state.yardColors[id] || '#3b82f6';
+      pill.style.setProperty('--yard-c', color);
+      if (id === state.activeYard) pill.style.borderColor = hexToRgba(color, 0.6);
+      pill.innerHTML = `<i class="fa-solid fa-warehouse" style="color:${color}"></i> ${id}${id === state.activeYard ? ' <span class="yard-live-dot"></span>' : ''}`;
       pill.title = state.yardsActive[id]
         ? `Ver ${id} (configuración independiente)`
         : `${id} desactivado — actívalo en "Gestionar Patios"`;
@@ -355,25 +375,232 @@
     YARD_IDS.forEach(id => {
       const active = state.yardsActive[id];
       const isCurrent = id === state.activeYard;
+      const color = state.yardColors[id] || '#3b82f6';
       const item = document.createElement('div');
       item.className = 'yard-manage-item';
+      item.dataset.yard = id;
       item.innerHTML = `
         <div class="yard-manage-info">
           <div class="yard-manage-title-row">
-            <strong>${id}</strong>
+            <strong data-yard-name="${id}">${id}</strong>
             ${isCurrent ? '<span class="yard-current-tag">Activo ahora</span>' : ''}
           </div>
           <small>${active
             ? 'Habilitado con su propia configuración de turnos, personal, rotación y cambios.'
             : 'Desactivado. Al activarlo inicia con turnos base y sin personal (se registra desde cero).'}</small>
         </div>
-        <label class="switch" title="${active ? 'Desactivar' : 'Activar'} ${id}">
-          <input type="checkbox" data-yard-toggle="${id}" ${active ? 'checked' : ''}>
-          <span class="slider"></span>
-        </label>
+        <div class="yard-manage-actions">
+          <button class="btn-icon-sm btn-move-yard" data-yard="${id}" data-dir="-1" title="Mover arriba">
+            <i class="fa-solid fa-arrow-up"></i>
+          </button>
+          <button class="btn-icon-sm btn-move-yard" data-yard="${id}" data-dir="1" title="Mover abajo">
+            <i class="fa-solid fa-arrow-down"></i>
+          </button>
+          <span class="yard-color-wrap">
+            <button class="yard-color-btn" data-yard-color="${id}" style="background:${color};" title="Color del patio (paleta RGB/HSL/HEX)">
+              <i class="fa-solid fa-palette"></i>
+            </button>
+            <input type="color" class="yard-color-input" data-yard-color-input="${id}" value="${color}">
+          </span>
+          <button class="btn-icon-sm btn-rename-yard" data-yard="${id}" title="Renombrar patio">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button class="btn-icon-sm btn-danger btn-delete-yard" data-yard="${id}" title="Eliminar patio">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+          <label class="switch" title="${active ? 'Desactivar' : 'Activar'} ${id}">
+            <input type="checkbox" data-yard-toggle="${id}" ${active ? 'checked' : ''}>
+            <span class="slider"></span>
+          </label>
+        </div>
       `;
       list.appendChild(item);
     });
+    // Bloque: crear un patio nuevo desde cero
+    const addBlock = document.createElement('div');
+    addBlock.className = 'yard-add-block';
+    addBlock.innerHTML = `
+      <div class="yard-add-info">
+        <strong><i class="fa-solid fa-plus"></i> Nuevo patio</strong>
+        <small>Se crea desde cero: turnos base (Mañana/Tarde/Noche) y sin personal. No clona otro patio.</small>
+      </div>
+      <div class="yard-add-controls">
+        <input id="newYardInput" class="form-input" maxlength="24" value="${nextYardName()}" title="Nombre del patio" />
+        <button id="addYardBtn" class="btn btn-primary btn-sm">Agregar</button>
+      </div>
+    `;
+    list.appendChild(addBlock);
+    const addInput = document.getElementById('newYardInput');
+    if (addInput) addInput.select();
+  }
+
+  function nextYardName() {
+    let n = 1;
+    while (YARD_IDS.includes('TPG' + n)) n++;
+    return 'TPG' + n;
+  }
+
+  /**
+   * Crea un patio nuevo como instancia independiente desde cero.
+   */
+  function addNewYard() {
+    const input = document.getElementById('newYardInput');
+    let name = (input && input.value ? input.value : '').trim().toUpperCase();
+    if (!name) name = nextYardName();
+    if (YARD_IDS.includes(name)) {
+      showToast(`El patio ${name} ya existe.`, 'error');
+      renderYardManageList();
+      const ni = document.getElementById('newYardInput');
+      if (ni) { ni.value = nextYardName(); ni.focus(); }
+      return;
+    }
+    // Guardar el patio actual antes de cambiar
+    saveConfig();
+    YARD_IDS.push(name);
+    state.yardsActive[name] = true;
+    state.activeYard = name;
+    saveYardMeta();
+    applyConfig(buildEmptyYardConfig());
+    state.swaps = {};
+    saveConfig();
+    state.selectedTechFilter = 'ALL';
+    const filter = document.getElementById('filterTechnician');
+    if (filter) filter.value = 'ALL';
+    populateTechSelects();
+    closeYardModal();
+    renderAll();
+    showToast(`Patio ${name} creado desde cero. Configura turnos, personal y rotación.`);
+  }
+
+  /**
+   * Establece el color de la píldora de un patio.
+   */
+  function setYardColor(id, color) {
+    if (!YARD_IDS.includes(id)) return;
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+      state.yardColors[id] = color;
+      saveYardMeta();
+      renderYardManageList();
+      renderYardBar();
+    }
+  }
+
+  /**
+   * Reordena la lista (y la barra) de patios, igual que los turnos.
+   */
+  function moveYard(idx, dir) {
+    const target = idx + dir;
+    if (target < 0 || target >= YARD_IDS.length) return;
+    const id = YARD_IDS[idx];
+    YARD_IDS.splice(idx, 1);
+    YARD_IDS.splice(target, 0, id);
+    saveYardMeta();
+    renderYardManageList();
+    renderYardBar();
+  }
+
+  /**
+   * Renombra un patio; mueve su configuración y cambios al nuevo nombre.
+   */
+  function renameYard(oldName, newName) {
+    const name = (newName || '').trim().toUpperCase();
+    if (!name) { showToast('El nombre del patio no puede quedar vacío.', 'error'); return false; }
+    if (name === oldName) return true;
+    if (YARD_IDS.includes(name)) {
+      showToast(`Ya existe un patio llamado ${name}.`, 'error');
+      return false;
+    }
+    const idx = YARD_IDS.indexOf(oldName);
+    if (idx === -1) return false;
+    YARD_IDS[idx] = name;
+    // Mover almacenamiento de configuración y cambios al nuevo nombre
+    try {
+      const cfg = localStorage.getItem(`${STORAGE_KEY}_${oldName}`);
+      if (cfg !== null) {
+        localStorage.setItem(`${STORAGE_KEY}_${name}`, cfg);
+        localStorage.removeItem(`${STORAGE_KEY}_${oldName}`);
+      }
+      const swp = localStorage.getItem(`${STORAGE_SWAPS_KEY}_${oldName}`);
+      if (swp !== null) {
+        localStorage.setItem(`${STORAGE_SWAPS_KEY}_${name}`, swp);
+        localStorage.removeItem(`${STORAGE_SWAPS_KEY}_${oldName}`);
+      }
+    } catch (e) { console.error('Error moviendo datos del patio:', e); }
+    state.yardsActive[name] = state.yardsActive[oldName];
+    delete state.yardsActive[oldName];
+    if (state.yardColors[oldName]) {
+      state.yardColors[name] = state.yardColors[oldName];
+      delete state.yardColors[oldName];
+    }
+    if (state.activeYard === oldName) state.activeYard = name;
+    saveYardMeta();
+    renderYardManageList();
+    renderYardBar();
+    renderAll();
+    showToast(`Patio renombrado a ${name}.`);
+    return true;
+  }
+
+  /**
+   * Convierte el nombre de un patio en un campo de edición inline.
+   */
+  function startYardRename(item) {
+    const id = item.dataset.yard;
+    const strong = item.querySelector('[data-yard-name]');
+    if (!strong || item.dataset.editing) return;
+    item.dataset.editing = '1';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'staff-edit-input yard-rename-input';
+    input.value = id;
+    input.maxLength = 24;
+    strong.replaceWith(input);
+    input.focus();
+    input.select();
+    const finish = save => {
+      if (!item.dataset.editing) return;
+      delete item.dataset.editing;
+      if (save) renameYard(id, input.value.trim());
+      renderYardManageList();
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
+  /**
+   * Elimina un patio y toda su configuración (no se puede deshacer).
+   */
+  function deleteYard(id) {
+    if (YARD_IDS.length <= 1) {
+      showToast('Debe quedar al menos un patio.', 'error');
+      return;
+    }
+    if (!confirm(`¿Eliminar el patio ${id}? Se borrará su configuración, personal, rotación, cambios y color. Esto no se puede deshacer.`)) return;
+
+    const wasActive = id === state.activeYard;
+    if (wasActive) {
+      const next = YARD_IDS.find(y => y !== id && state.yardsActive[y]) || YARD_IDS.find(y => y !== id);
+      if (!next) return;
+      state.activeYard = next;
+      loadConfig();
+      state.selectedTechFilter = 'ALL';
+      const filter = document.getElementById('filterTechnician');
+      if (filter) filter.value = 'ALL';
+      populateTechSelects();
+    }
+    YARD_IDS = YARD_IDS.filter(y => y !== id);
+    delete state.yardsActive[id];
+    delete state.yardColors[id];
+    try {
+      localStorage.removeItem(`${STORAGE_KEY}_${id}`);
+      localStorage.removeItem(`${STORAGE_SWAPS_KEY}_${id}`);
+    } catch (e) { /* ignore */ }
+    saveYardMeta();
+    renderAll();
+    showToast(`Patio ${id} eliminado.`);
   }
 
   function switchYard(id) {
@@ -1784,6 +2011,46 @@
         const toggle = e.target.closest('input[data-yard-toggle]');
         if (!toggle) return;
         setYardActive(toggle.dataset.yardToggle, toggle.checked);
+      });
+      yardManageList.addEventListener('click', e => {
+        if (e.target.closest('#addYardBtn')) { addNewYard(); return; }
+        const moveBtn = e.target.closest('.btn-move-yard');
+        if (moveBtn) {
+          const idx = YARD_IDS.indexOf(moveBtn.dataset.yard);
+          moveYard(idx, parseInt(moveBtn.dataset.dir, 10));
+          return;
+        }
+        const renameBtn = e.target.closest('.btn-rename-yard');
+        if (renameBtn) {
+          const item = renameBtn.closest('.yard-manage-item');
+          startYardRename(item);
+          return;
+        }
+        const delBtn = e.target.closest('.btn-delete-yard');
+        if (delBtn) {
+          const id = delBtn.dataset.yard;
+          closeYardModal();
+          deleteYard(id);
+          return;
+        }
+        const swatch = e.target.closest('.yard-color-btn');
+        if (swatch) {
+          const input = swatch.parentElement.querySelector('.yard-color-input');
+          if (input) input.click();
+          return;
+        }
+      });
+      yardManageList.addEventListener('change', e => {
+        const color = e.target.closest('.yard-color-input');
+        if (color) {
+          setYardColor(color.dataset.yardColorInput, color.value);
+        }
+      });
+      yardManageList.addEventListener('keydown', e => {
+        if (e.target && e.target.id === 'newYardInput' && e.key === 'Enter') {
+          e.preventDefault();
+          addNewYard();
+        }
       });
     }
 
