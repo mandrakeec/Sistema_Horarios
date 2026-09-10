@@ -2530,43 +2530,54 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
 
   function pushToCloud() {
     try {
+      if (typeof firebase === 'undefined') {
+        showToast('El SDK de Firebase no se cargó (revisa conexión a internet y bloqueadores).', 'error');
+        return;
+      }
       if (!cloudReady()) {
         showToast('La nube aún no está configurada: crea el proyecto Firebase y pega su config en CLOUD_CONFIG (app.js).', 'error');
         return;
       }
-      saveConfig();
       const doc = cloudDoc();
       if (!doc) return;
-      doc.set(Object.assign({}, buildCloudEnvelope(), {
+      saveConfig();
+      doc.set({
+        payload: JSON.stringify(buildCloudEnvelope()),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      })).then(() => {
+      }).then(() => {
         const now = Date.now();
         localStorage.setItem('cloudLastApplied', String(now));
         updateCloudStatus('En la nube · ' + new Date(now).toLocaleTimeString());
         showToast('Datos subidos a la nube. Los demás verán esta versión al abrir el link.');
       }).catch(err => {
-        console.error(err);
-        showToast('Error subiendo. Revisa las reglas de Firestore (permitir lectura/escritura).', 'error');
+        console.error('[pushToCloud]', err);
+        let msg = 'Error subiendo a la nube (revisa que exista la base Firestore y las reglas).';
+        if (err && err.message) msg += ' ' + err.message;
+        showToast(msg, 'error');
       });
-    } catch (e) { console.error('pushToCloud:', e); }
+    } catch (e) {
+      console.error('[pushToCloud]', e);
+      showToast('Error al conectar con Firebase: ' + (e && e.message ? e.message : e), 'error');
+    }
   }
 
   function applyCloudData(data) {
     try {
       const ts = tsToMillis(data.updatedAt);
-      if (data.yards && Array.isArray(data.yards)) {
-        data.yards.forEach(id => {
-          const d = data.yardsData && data.yardsData[id];
+      const env = typeof data.payload === 'string' ? JSON.parse(data.payload) : data;
+      if (env.yards && Array.isArray(env.yards)) {
+        env.yards.forEach(id => {
+          const d = env.yardsData && env.yardsData[id];
           if (!d) return;
           if (d.config) localStorage.setItem(`${STORAGE_KEY}_${id}`, JSON.stringify(d.config));
           if (d.swaps) localStorage.setItem(`${STORAGE_SWAPS_KEY}_${id}`, JSON.stringify(d.swaps));
         });
       }
       localStorage.setItem(STORAGE_YARDS_KEY, JSON.stringify({
-        yards: data.yards,
-        yardsActive: data.yardsActive,
-        yardColors: data.yardColors,
-        activeYard: data.activeYard
+        yards: env.yards,
+        yardsActive: env.yardsActive,
+        yardColors: env.yardColors,
+        activeYard: env.activeYard
       }));
       if (ts > 0) localStorage.setItem('cloudLastApplied', String(ts));
     } catch (e) { console.error('applyCloudData:', e); }
@@ -2607,7 +2618,7 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
 
   function startCloudSync() {
     try {
-      if (!cloudReady()) return;
+      if (!cloudReady() || typeof firebase === 'undefined') return;
       const doc = cloudDoc();
       if (!doc) return;
       doc.get().then(snap => {
