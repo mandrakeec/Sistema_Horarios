@@ -38,6 +38,10 @@
         <button id="printBtn" class="btn btn-primary" title="Imprimir o guardar PDF">
           <i class="fa-solid fa-print"></i> <span>Imprimir / PDF</span>
         </button>
+        <button id="cloudSyncBtn" class="btn btn-secondary" title="Subir todos los patios (turnos, personal, rotación y cambios) a la nube. Los demás ven esta versión al abrir el link.">
+          <i class="fa-solid fa-cloud-arrow-up"></i> <span>Subir a la nube</span>
+        </button>
+        <div id="cloudStatus" class="cloud-status" style="display:none;"></div>
         <button id="themeToggleBtn" class="btn-icon" title="Cambiar tema claro/oscuro">
           <i class="fa-solid fa-circle-half-stroke"></i>
         </button>
@@ -510,6 +514,8 @@
 
   </div><!-- /app-container -->
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

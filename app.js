@@ -15,9 +15,17 @@
   const DAY_NAMES   = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
   const DAY_NAMES_FULL = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
-  const STORAGE_KEY       = 'univ_shift_planner_v3';
+const STORAGE_KEY       = 'univ_shift_planner_v3';
   const STORAGE_SWAPS_KEY = 'univ_shift_swaps_v3';
   const STORAGE_YARDS_KEY = 'univ_shift_yards_v3';
+
+  const CLOUD_CONFIG = {
+    apiKey: 'AIzaSyCCOvYvnbydOr3czR_Qn52M-0cig9sqqrw',
+    authDomain: 'sistema-horarios-13c81.firebaseapp.com',
+    projectId: 'sistema-horarios-13c81',
+    appId: '1:964530132843:web:8f82b86509fdb2b677de2e'
+  };
+
   let YARD_IDS = ['TPG1', 'TPG2', 'TPG3', 'TPG4'];
 
   // ==========================================
@@ -793,6 +801,7 @@
     setupEventListeners();
     applyTheme();
     renderAll();
+    startCloudSync();
   }
 
   function populateYearSelect() {
@@ -2031,6 +2040,16 @@
     // Theme toggle
     document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
 
+    // Nube (Firestore)
+    const cloudSyncBtn = document.getElementById('cloudSyncBtn');
+    if (cloudSyncBtn) cloudSyncBtn.addEventListener('click', pushToCloud);
+    const cloudStatus = document.getElementById('cloudStatus');
+    if (cloudStatus) {
+      cloudStatus.addEventListener('click', e => {
+        if (e.target.id === 'cloudApplyBtn') applyRemoteNow();
+      });
+    }
+
     // Patios — barra selector (delegado)
     const yardPills = document.getElementById('yardPills');
     if (yardPills) {
@@ -2461,6 +2480,157 @@
       renderAll();
       showToast('Todos los reemplazos eliminados.');
     });
+  }
+
+  // ==========================================
+  // NUBE — Firestore (datos compartidos por el link)
+  // ==========================================
+  let cloudDb = null;
+
+  function cloudReady() {
+    return !!(CLOUD_CONFIG && CLOUD_CONFIG.projectId && CLOUD_CONFIG.apiKey);
+  }
+
+  function cloudDoc() {
+    if (!cloudReady()) return null;
+    if (!cloudDb) {
+      if (!firebase.apps.length) firebase.initializeApp(CLOUD_CONFIG);
+      cloudDb = firebase.firestore();
+    }
+    return cloudDb.collection('horarios_tpg').doc('instancia_principal');
+  }
+
+  function tsToMillis(t) {
+    if (t && typeof t.toMillis === 'function') return t.toMillis();
+    if (typeof t === 'number') return t;
+    return 0;
+  }
+
+  function buildCloudEnvelope() {
+    const yardsData = {};
+    YARD_IDS.forEach(id => {
+      let config = null, swaps = null;
+      try {
+        const c = localStorage.getItem(`${STORAGE_KEY}_${id}`);
+        if (c) config = JSON.parse(c);
+        const s = localStorage.getItem(`${STORAGE_SWAPS_KEY}_${id}`);
+        if (s) swaps = JSON.parse(s);
+      } catch (e) { /* ignore */ }
+      yardsData[id] = { config, swaps };
+    });
+    return {
+      v: 1,
+      yards: YARD_IDS,
+      yardsActive: Object.assign({}, state.yardsActive),
+      yardColors: Object.assign({}, state.yardColors),
+      activeYard: state.activeYard,
+      yardsData
+    };
+  }
+
+  function pushToCloud() {
+    try {
+      if (!cloudReady()) {
+        showToast('La nube aún no está configurada: crea el proyecto Firebase y pega su config en CLOUD_CONFIG (app.js).', 'error');
+        return;
+      }
+      saveConfig();
+      const doc = cloudDoc();
+      if (!doc) return;
+      doc.set(Object.assign({}, buildCloudEnvelope(), {
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      })).then(() => {
+        const now = Date.now();
+        localStorage.setItem('cloudLastApplied', String(now));
+        updateCloudStatus('En la nube · ' + new Date(now).toLocaleTimeString());
+        showToast('Datos subidos a la nube. Los demás verán esta versión al abrir el link.');
+      }).catch(err => {
+        console.error(err);
+        showToast('Error subiendo. Revisa las reglas de Firestore (permitir lectura/escritura).', 'error');
+      });
+    } catch (e) { console.error('pushToCloud:', e); }
+  }
+
+  function applyCloudData(data) {
+    try {
+      const ts = tsToMillis(data.updatedAt);
+      if (data.yards && Array.isArray(data.yards)) {
+        data.yards.forEach(id => {
+          const d = data.yardsData && data.yardsData[id];
+          if (!d) return;
+          if (d.config) localStorage.setItem(`${STORAGE_KEY}_${id}`, JSON.stringify(d.config));
+          if (d.swaps) localStorage.setItem(`${STORAGE_SWAPS_KEY}_${id}`, JSON.stringify(d.swaps));
+        });
+      }
+      localStorage.setItem(STORAGE_YARDS_KEY, JSON.stringify({
+        yards: data.yards,
+        yardsActive: data.yardsActive,
+        yardColors: data.yardColors,
+        activeYard: data.activeYard
+      }));
+      if (ts > 0) localStorage.setItem('cloudLastApplied', String(ts));
+    } catch (e) { console.error('applyCloudData:', e); }
+  }
+
+  function hasLocalData() {
+    return Object.keys(localStorage).some(k => k.indexOf(STORAGE_KEY) === 0);
+  }
+
+  function updateCloudStatus(content, mode) {
+    const el = document.getElementById('cloudStatus');
+    if (!el) return;
+    el.style.display = 'inline-flex';
+    el.className = 'cloud-status' + (mode === 'update' ? ' cloud-update' : '');
+    el.innerHTML = content;
+  }
+
+  function checkRemoteUpdate(data, remoteTs, lastApplied) {
+    if (remoteTs > lastApplied) {
+      updateCloudStatus('En la nube: versión ' + new Date(remoteTs).toLocaleTimeString() + ' <button id="cloudApplyBtn" type="button">Aplicar</button>', 'update');
+    } else if (remoteTs > 0) {
+      updateCloudStatus('Al día · ' + new Date(remoteTs).toLocaleTimeString());
+    }
+  }
+
+  function applyRemoteNow() {
+    try {
+      const doc = cloudDoc();
+      if (!doc) return;
+      doc.get().then(snap => {
+        if (!snap.exists) return;
+        const data = snap.data();
+        applyCloudData(data);
+        location.reload();
+      }).catch(err => console.error('applyRemoteNow:', err));
+    } catch (e) { console.error('applyRemoteNow:', e); }
+  }
+
+  function startCloudSync() {
+    try {
+      if (!cloudReady()) return;
+      const doc = cloudDoc();
+      if (!doc) return;
+      doc.get().then(snap => {
+        if (!snap.exists) return;
+        const data = snap.data();
+        const remoteTs = tsToMillis(data.updatedAt);
+        const lastApplied = parseInt(localStorage.getItem('cloudLastApplied') || '0', 10) || 0;
+        if (!hasLocalData() && remoteTs > 0) {
+          applyCloudData(data);
+          location.reload();
+          return;
+        }
+        checkRemoteUpdate(data, remoteTs, lastApplied);
+      }).catch(err => console.error('Error leyendo nube:', err));
+
+      doc.onSnapshot(snap => {
+        if (!snap.exists) return;
+        const data = snap.data();
+        const remoteTs = tsToMillis(data.updatedAt);
+        const lastApplied = parseInt(localStorage.getItem('cloudLastApplied') || '0', 10) || 0;
+        checkRemoteUpdate(data, remoteTs, lastApplied);
+      });
+    } catch (e) { console.error('startCloudSync:', e); }
   }
 
   // ==========================================
