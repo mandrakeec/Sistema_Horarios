@@ -167,6 +167,8 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     selectedMonth:      new Date().getMonth(),
     currentView:        'list',
     selectedTechFilter: 'ALL',
+    // Modo administrador (PIN): false = solo lectura
+    admin: false,
     // Swaps: { 'YYYY-MM-DD': { 'personName': { replacement, reason, fromTime, toTime } } }
     swaps: {}
   };
@@ -802,6 +804,7 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     applyTheme();
     renderAll();
     startCloudSync();
+    initAdminAuth();
   }
 
   function populateYearSelect() {
@@ -1423,10 +1426,10 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
           <td><span class="partial-time-badge">${horario}</span></td>
           <td>${reason}</td>
           <td>
-            <button class="btn btn-outline btn-sm btn-edit-swap" data-date="${dateKey}" data-person="${origPerson}" title="Modificar reemplazo">
+            <button class="btn btn-outline btn-sm btn-edit-swap admin-only-act" data-date="${dateKey}" data-person="${origPerson}" title="Modificar reemplazo">
               <i class="fa-solid fa-pen"></i>
             </button>
-            <button class="btn btn-danger btn-sm btn-delete-swap" data-date="${dateKey}" data-person="${origPerson}" title="Eliminar reemplazo">
+            <button class="btn btn-danger btn-sm btn-delete-swap admin-only-act" data-date="${dateKey}" data-person="${origPerson}" title="Eliminar reemplazo">
               <i class="fa-solid fa-trash"></i>
             </button>
           </td>
@@ -2050,6 +2053,34 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
       });
     }
 
+    // Modo administrador (PIN)
+    const adminLockBtn = document.getElementById('adminLockBtn');
+    if (adminLockBtn) {
+      adminLockBtn.addEventListener('click', () => {
+        openAuthModal(isAdmin() ? 'change' : 'unlock');
+      });
+    }
+    const authModal = document.getElementById('authModal');
+    if (authModal) {
+      const closeAuthBtn = document.getElementById('closeAuthModalBtn');
+      if (closeAuthBtn) closeAuthBtn.addEventListener('click', closeAuthModal);
+      const cancelAuthBtn = document.getElementById('authCancelBtn');
+      if (cancelAuthBtn) cancelAuthBtn.addEventListener('click', closeAuthModal);
+      authModal.addEventListener('click', e => {
+        if (e.target === authModal) closeAuthModal();
+      });
+    }
+    const authPinSubmitBtn = document.getElementById('authPinSubmitBtn');
+    if (authPinSubmitBtn) authPinSubmitBtn.addEventListener('click', handleAuthSubmit);
+    const authLogoutBtn = document.getElementById('authLogoutBtn');
+    if (authLogoutBtn) authLogoutBtn.addEventListener('click', adminLogout);
+    const authPinNew2 = document.getElementById('authPinNew2');
+    if (authPinNew2) {
+      authPinNew2.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); handleAuthSubmit(); }
+      });
+    }
+
     // Patios — barra selector (delegado)
     const yardPills = document.getElementById('yardPills');
     if (yardPills) {
@@ -2483,6 +2514,139 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
   }
 
   // ==========================================
+  // ADMIN — entrada por PIN (resto: solo lectura)
+  // ==========================================
+  // Cuenta neutra de administrador: nadie ve este email. El PIN es su contraseña
+  // y se verifica en el servidor (Firebase Auth), no en el navegador.
+  const ADMIN_EMAIL = 'admin@mandrake.ec';
+
+  function adminEnabled() {
+    try { return typeof firebase !== 'undefined' && !!firebase.auth; } catch (e) { return false; }
+  }
+
+  function isAdmin() {
+    return !!(state && state.admin);
+  }
+
+  function setAdminMode(ok) {
+    state.admin = !!ok;
+    document.body.classList.toggle('admin-mode', !!ok);
+    const btn = document.getElementById('adminLockBtn');
+    if (btn) {
+      if (ok) {
+        btn.innerHTML = '<i class="fa-solid fa-unlock"></i> <span>Admin ✓</span>';
+        btn.title = 'Modo administrador activo. Clic: cambiar el PIN o bloquear.';
+      } else {
+        btn.innerHTML = '<i class="fa-solid fa-lock"></i> <span>PIN Admin</span>';
+        btn.title = 'Entrar como administrador con el PIN para editar y subir la nube. Sin PIN el sistema se ve en modo solo lectura.';
+      }
+    }
+  }
+
+  function initAdminAuth() {
+    try {
+      if (!adminEnabled() || !cloudReady()) return;
+      if (!firebase.apps.length) firebase.initializeApp(CLOUD_CONFIG);
+      firebase.auth().onAuthStateChanged(user => {
+        const ok = !!(user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+        setAdminMode(ok);
+        if (ok) showToast('Modo administrador activo. Ya puedes editar y subir a la nube.');
+      });
+    } catch (e) { console.error('initAdminAuth:', e); }
+  }
+
+  function openAuthModal(mode) {
+    const modal = document.getElementById('authModal');
+    if (!modal) return;
+    const title = document.getElementById('authModalTitle');
+    const newWrap = document.getElementById('authPinNewWrap');
+    const submitBtn = document.getElementById('authPinSubmitBtn');
+    const logoutBtn = document.getElementById('authLogoutBtn');
+    const cur = document.getElementById('authPinCur');
+    const n1 = document.getElementById('authPinNew');
+    const n2 = document.getElementById('authPinNew2');
+    if (cur) cur.value = '';
+    if (n1) n1.value = '';
+    if (n2) n2.value = '';
+    const isChange = mode === 'change';
+    if (title) title.innerHTML = isChange
+      ? '<i class="fa-solid fa-key"></i> Cambiar PIN de administrador'
+      : '<i class="fa-solid fa-lock"></i> Entrar como administrador';
+    if (newWrap) newWrap.style.display = isChange ? '' : 'none';
+    if (submitBtn) submitBtn.innerHTML = isChange
+      ? '<i class="fa-solid fa-key"></i> Guardar nuevo PIN'
+      : '<i class="fa-solid fa-check"></i> Entrar';
+    if (logoutBtn) logoutBtn.style.display = isChange ? '' : 'none';
+    modal.classList.add('open');
+    setTimeout(() => { if (cur) cur.focus(); }, 60);
+  }
+
+  function closeAuthModal() {
+    const modal = document.getElementById('authModal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function handleAuthSubmit() {
+    try {
+      if (!adminEnabled()) { showToast('Firebase Auth no disponible (revisa conexión y bloqueadores).', 'error'); return; }
+      const cur = document.getElementById('authPinCur').value.trim();
+      const newWrap = document.getElementById('authPinNewWrap');
+      const n1 = document.getElementById('authPinNew').value;
+      const n2 = document.getElementById('authPinNew2').value;
+      const isChange = newWrap.style.display !== 'none';
+      if (!cur) { showToast('Escribe el PIN.', 'error'); return; }
+      if (isChange) {
+        if (n1.length < 6) { showToast('El PIN nuevo debe tener al menos 6 caracteres.', 'error'); return; }
+        if (n1 !== n2) { showToast('El PIN nuevo no coincide en ambos campos.', 'error'); return; }
+        changeAdminPin(cur, n1);
+      } else {
+        firebase.auth().signInWithEmailAndPassword(ADMIN_EMAIL, cur)
+          .then(() => closeAuthModal())
+          .catch(() => showToast('PIN incorrecto. Si es la primera vez, primero crea la cuenta admin en Firebase.', 'error'));
+      }
+    } catch (e) {
+      console.error('handleAuthSubmit:', e);
+      showToast('Error al autenticar.', 'error');
+    }
+  }
+
+  function changeAdminPin(curPin, newPin) {
+    const user = firebase.auth().currentUser;
+    if (!user) {
+      firebase.auth().signInWithEmailAndPassword(ADMIN_EMAIL, curPin)
+        .then(() => updateAdminPin(newPin))
+        .catch(() => showToast('PIN actual incorrecto.', 'error'));
+      return;
+    }
+    user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(ADMIN_EMAIL, curPin))
+      .then(() => updateAdminPin(newPin))
+      .catch(() => showToast('PIN actual incorrecto.', 'error'));
+  }
+
+  function updateAdminPin(newPin) {
+    const user = firebase.auth().currentUser;
+    if (!user) return;
+    user.updatePassword(newPin)
+      .then(() => {
+        closeAuthModal();
+        showToast('PIN actualizado. A partir de ahora solo funciona el PIN nuevo.');
+      })
+      .catch(err => showToast('No se pudo cambiar el PIN: ' + (err && err.message ? err.message : 'error'), 'error'));
+  }
+
+  function adminLogout() {
+    try {
+      if (!adminEnabled()) return;
+      firebase.auth().signOut()
+        .then(() => {
+          closeAuthModal();
+          showToast('Sesión bloqueada. Sistema en modo solo lectura.');
+        })
+        .catch(() => {});
+    } catch (e) { console.error('adminLogout:', e); }
+  }
+
+  // ==========================================
   // NUBE — Firestore (datos compartidos por el link)
   // ==========================================
   let cloudDb = null;
@@ -2536,6 +2700,10 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
       }
       if (!cloudReady()) {
         showToast('La nube aún no está configurada: crea el proyecto Firebase y pega su config en CLOUD_CONFIG (app.js).', 'error');
+        return;
+      }
+      if (!isAdmin()) {
+        showToast('Debes entrar como administrador (PIN) para subir a la nube.', 'error');
         return;
       }
       const doc = cloudDoc();

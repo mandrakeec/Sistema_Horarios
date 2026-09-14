@@ -1147,3 +1147,11 @@ body.theme-light .brand-info h1 {
 .cov-empty  { background: rgba(239,68,68,0.15);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.4); }
 .cov-ok     { background: rgba(59,130,246,0.15);  color: var(--primary); border: 1px solid rgba(59,130,246,0.4); }
 .cov-strong { background: rgba(16,185,129,0.18);  color: #10b981;        border: 1px solid rgba(16,185,129,0.45); }
+
+/* --------------------------------------------------------------------------
+   MODO SEGURO (admin por PIN) — por defecto solo lectura
+   -------------------------------------------------------------------------- */
+body:not(.admin-mode) [data-admin] { display: none !important; }
+body:not(.admin-mode) .admin-only-act { display: none !important; }
+#authPinCur { font-family: var(--font-mono, monospace); letter-spacing: 2px; }
+#authPinNew, #authPinNew2 { font-family: var(--font-mono, monospace); letter-spacing: 2px; }

@@ -32,16 +32,19 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="openConfigBtn" class="btn btn-secondary" title="Configurar el sistema">
+        <button id="openConfigBtn" class="btn btn-secondary" data-admin title="Configurar el sistema">
           <i class="fa-solid fa-sliders"></i> <span>Configurar Sistema</span>
         </button>
         <button id="printBtn" class="btn btn-primary" title="Imprimir o guardar PDF">
           <i class="fa-solid fa-print"></i> <span>Imprimir / PDF</span>
         </button>
-        <button id="cloudSyncBtn" class="btn btn-secondary" title="Subir todos los patios (turnos, personal, rotación y cambios) a la nube. Los demás ven esta versión al abrir el link.">
+        <button id="cloudSyncBtn" class="btn btn-secondary" data-admin title="Subir todos los patios (turnos, personal, rotación y cambios) a la nube. Los demás ven esta versión al abrir el link.">
           <i class="fa-solid fa-cloud-arrow-up"></i> <span>Subir a la nube</span>
         </button>
         <div id="cloudStatus" class="cloud-status" style="display:none;"></div>
+        <button id="adminLockBtn" class="btn btn-secondary" title="Entrar como administrador con el PIN para editar y subir la nube. Sin PIN el sistema se ve en modo solo lectura.">
+          <i class="fa-solid fa-lock"></i> <span>PIN Admin</span>
+        </button>
         <button id="themeToggleBtn" class="btn-icon" title="Cambiar tema claro/oscuro">
           <i class="fa-solid fa-circle-half-stroke"></i>
         </button>
@@ -55,7 +58,7 @@
       <div class="yard-bar">
         <span class="yard-bar-label"><i class="fa-solid fa-warehouse"></i> Patio:</span>
         <div class="yard-pills" id="yardPills"></div>
-        <button id="manageYardsBtn" class="btn btn-outline btn-sm" title="Activar o desactivar patios">
+        <button id="manageYardsBtn" class="btn btn-outline btn-sm" data-admin title="Activar o desactivar patios">
           <i class="fa-solid fa-gear"></i> Gestionar Patios
         </button>
       </div>
@@ -234,7 +237,7 @@
       <!-- 6. SWAPS / REPLACEMENTS VIEW -->
       <section id="viewSwaps" class="view-panel">
         <div class="swap-manager-container">
-          <div class="swap-form-card">
+          <div class="swap-form-card" data-admin>
             <h3><i class="fa-solid fa-right-left"></i> Registrar Reemplazo o Cambio de Turno</h3>
             <p class="subtitle">Registra cuando un titular es reemplazado, ya sea por otro compañero o por personal externo.</p>
 
@@ -283,7 +286,7 @@
           <div class="table-card" style="margin-top: 24px;">
             <div class="card-toolbar">
               <h3>Historial de Reemplazos Activos</h3>
-              <button id="clearAllSwapsBtn" class="btn btn-danger btn-sm">
+              <button id="clearAllSwapsBtn" class="btn btn-danger btn-sm" data-admin>
                 <i class="fa-solid fa-trash"></i> Limpiar Todos
               </button>
             </div>
@@ -509,6 +512,42 @@
       </div>
     </div>
 
+    <!-- ============================================================ -->
+    <!-- MODAL ADMIN / PIN (modo seguro)                                -->
+    <!-- ============================================================ -->
+    <div id="authModal" class="modal-backdrop">
+      <div class="modal-card" style="max-width: 420px;">
+        <div class="modal-header">
+          <h3 id="authModalTitle"><i class="fa-solid fa-lock"></i> Entrar como administrador</h3>
+          <button class="modal-close" id="closeAuthModalBtn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="authPinCur"><i class="fa-solid fa-key"></i> PIN de administrador:</label>
+            <input type="password" id="authPinCur" class="form-input" placeholder="Escribe el PIN" autocomplete="off">
+            <small class="form-hint-small">Sin PIN el sistema se ve en modo solo lectura. El PIN solo se comparte con quien deba editar.</small>
+          </div>
+          <div class="form-group" id="authPinNewWrap" style="display:none;">
+            <label for="authPinNew"><i class="fa-solid fa-key"></i> PIN nuevo:</label>
+            <input type="password" id="authPinNew" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="off">
+            <label for="authPinNew2" style="margin-top:10px;"><i class="fa-solid fa-key"></i> Repetir PIN nuevo:</label>
+            <input type="password" id="authPinNew2" class="form-input" placeholder="Repite el PIN nuevo" autocomplete="off">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="authLogoutBtn" class="btn btn-danger" style="display:none;">
+            <i class="fa-solid fa-lock"></i> Bloquear (salir)
+          </button>
+          <div style="margin-left:auto; display:flex; gap:8px;">
+            <button id="authCancelBtn" class="btn btn-outline">Cancelar</button>
+            <button id="authPinSubmitBtn" class="btn btn-primary">
+              <i class="fa-solid fa-check"></i> Entrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- NOTIFICATION TOAST -->
     <div id="toastNotification" class="toast"></div>
 
@@ -516,6 +555,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v=3"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
