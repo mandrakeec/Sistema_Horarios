@@ -882,7 +882,7 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
         state.staff.external.forEach(p => {
           const opt = document.createElement('option');
           opt.value = p;
-          opt.textContent = `[Externo] ${p}`;
+          opt.textContent = p;
           g2.appendChild(opt);
         });
         swapB.appendChild(g2);
@@ -2057,7 +2057,7 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     const adminLockBtn = document.getElementById('adminLockBtn');
     if (adminLockBtn) {
       adminLockBtn.addEventListener('click', () => {
-        openAuthModal(isAdmin() ? 'change' : 'unlock');
+        openAuthModal(isAdmin() ? 'menu' : 'unlock');
       });
     }
     const authModal = document.getElementById('authModal');
@@ -2074,12 +2074,17 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     if (authPinSubmitBtn) authPinSubmitBtn.addEventListener('click', handleAuthSubmit);
     const authLogoutBtn = document.getElementById('authLogoutBtn');
     if (authLogoutBtn) authLogoutBtn.addEventListener('click', adminLogout);
-    const authPinNew2 = document.getElementById('authPinNew2');
-    if (authPinNew2) {
-      authPinNew2.addEventListener('keydown', e => {
+    const authChangePinBtn = document.getElementById('authChangePinBtn');
+    if (authChangePinBtn) authChangePinBtn.addEventListener('click', () => openAuthModal('change'));
+    ['authPinCur', 'authPinNew', 'authPinNew2'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); handleAuthSubmit(); }
       });
-    }
+    });
+    document.querySelectorAll('.pin-eye').forEach(btn => {
+      btn.addEventListener('click', () => togglePinVisibility(btn));
+    });
 
     // Patios — barra selector (delegado)
     const yardPills = document.getElementById('yardPills');
@@ -2559,31 +2564,52 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     const modal = document.getElementById('authModal');
     if (!modal) return;
     const title = document.getElementById('authModalTitle');
+    const menuWrap = document.getElementById('authMenuWrap');
+    const fieldsWrap = document.getElementById('authPinFieldsWrap');
     const newWrap = document.getElementById('authPinNewWrap');
     const submitBtn = document.getElementById('authPinSubmitBtn');
-    const logoutBtn = document.getElementById('authLogoutBtn');
+    const cancelBtn = document.getElementById('authCancelBtn');
     const cur = document.getElementById('authPinCur');
     const n1 = document.getElementById('authPinNew');
     const n2 = document.getElementById('authPinNew2');
     if (cur) cur.value = '';
     if (n1) n1.value = '';
     if (n2) n2.value = '';
+    const isMenu  = mode === 'menu';
     const isChange = mode === 'change';
-    if (title) title.innerHTML = isChange
-      ? '<i class="fa-solid fa-key"></i> Cambiar PIN de administrador'
-      : '<i class="fa-solid fa-lock"></i> Entrar como administrador';
+    if (title) {
+      if (isMenu) title.innerHTML = '<i class="fa-solid fa-unlock"></i> Modo administrador';
+      else if (isChange) title.innerHTML = '<i class="fa-solid fa-key"></i> Cambiar PIN de administrador';
+      else title.innerHTML = '<i class="fa-solid fa-lock"></i> Entrar como administrador';
+    }
+    if (menuWrap) menuWrap.style.display = isMenu ? '' : 'none';
+    if (fieldsWrap) fieldsWrap.style.display = isMenu ? 'none' : '';
     if (newWrap) newWrap.style.display = isChange ? '' : 'none';
-    if (submitBtn) submitBtn.innerHTML = isChange
-      ? '<i class="fa-solid fa-key"></i> Guardar nuevo PIN'
-      : '<i class="fa-solid fa-check"></i> Entrar';
-    if (logoutBtn) logoutBtn.style.display = isChange ? '' : 'none';
+    if (submitBtn) {
+      submitBtn.style.display = isMenu ? 'none' : '';
+      submitBtn.innerHTML = isChange
+        ? '<i class="fa-solid fa-key"></i> Guardar nuevo PIN'
+        : '<i class="fa-solid fa-check"></i> Entrar';
+    }
+    if (cancelBtn) cancelBtn.style.display = isMenu ? 'none' : '';
     modal.classList.add('open');
-    setTimeout(() => { if (cur) cur.focus(); }, 60);
+    setTimeout(() => { if (!isMenu && cur) cur.focus(); }, 60);
   }
 
   function closeAuthModal() {
     const modal = document.getElementById('authModal');
     if (modal) modal.classList.remove('open');
+  }
+
+  function togglePinVisibility(btn) {
+    const input = document.getElementById(btn.dataset.pinEye);
+    if (!input) return;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.innerHTML = show
+      ? '<i class="fa-solid fa-eye-slash"></i>'
+      : '<i class="fa-regular fa-eye"></i>';
+    input.focus();
   }
 
   function handleAuthSubmit() {

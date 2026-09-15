@@ -522,22 +522,41 @@
           <button class="modal-close" id="closeAuthModalBtn">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label for="authPinCur"><i class="fa-solid fa-key"></i> PIN de administrador:</label>
-            <input type="password" id="authPinCur" class="form-input" placeholder="Escribe el PIN" autocomplete="off">
-            <small class="form-hint-small">Sin PIN el sistema se ve en modo solo lectura. El PIN solo se comparte con quien deba editar.</small>
+          <div id="authMenuWrap" style="display:none;">
+            <p class="modal-note">Estás en modo administrador. Elige qué hacer:</p>
+            <div style="display:flex; gap:10px; margin-top:14px;">
+              <button id="authLogoutBtn" class="btn btn-danger" style="flex:1;">
+                <i class="fa-solid fa-lock"></i> Bloquear
+              </button>
+              <button id="authChangePinBtn" class="btn btn-primary" style="flex:1;">
+                <i class="fa-solid fa-key"></i> Cambiar PIN
+              </button>
+            </div>
           </div>
-          <div class="form-group" id="authPinNewWrap" style="display:none;">
-            <label for="authPinNew"><i class="fa-solid fa-key"></i> PIN nuevo:</label>
-            <input type="password" id="authPinNew" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="off">
-            <label for="authPinNew2" style="margin-top:10px;"><i class="fa-solid fa-key"></i> Repetir PIN nuevo:</label>
-            <input type="password" id="authPinNew2" class="form-input" placeholder="Repite el PIN nuevo" autocomplete="off">
+          <div id="authPinFieldsWrap">
+            <div class="form-group">
+              <label for="authPinCur"><i class="fa-solid fa-key"></i> PIN de administrador:</label>
+              <div class="pin-input-wrap">
+                <input type="password" id="authPinCur" class="form-input" placeholder="Escribe el PIN" autocomplete="off">
+                <button type="button" class="pin-eye" data-pin-eye="authPinCur" title="Mostrar / Ocultar PIN"><i class="fa-regular fa-eye"></i></button>
+              </div>
+              <small class="form-hint-small">Sin PIN el sistema se ve en modo solo lectura. El PIN solo se comparte con quien deba editar.</small>
+            </div>
+            <div class="form-group" id="authPinNewWrap" style="display:none;">
+              <label for="authPinNew"><i class="fa-solid fa-key"></i> PIN nuevo:</label>
+              <div class="pin-input-wrap">
+                <input type="password" id="authPinNew" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="off">
+                <button type="button" class="pin-eye" data-pin-eye="authPinNew" title="Mostrar / Ocultar PIN"><i class="fa-regular fa-eye"></i></button>
+              </div>
+              <label for="authPinNew2" style="margin-top:10px;"><i class="fa-solid fa-key"></i> Repetir PIN nuevo:</label>
+              <div class="pin-input-wrap">
+                <input type="password" id="authPinNew2" class="form-input" placeholder="Repite el PIN nuevo" autocomplete="off">
+                <button type="button" class="pin-eye" data-pin-eye="authPinNew2" title="Mostrar / Ocultar PIN"><i class="fa-regular fa-eye"></i></button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button id="authLogoutBtn" class="btn btn-danger" style="display:none;">
-            <i class="fa-solid fa-lock"></i> Bloquear (salir)
-          </button>
           <div style="margin-left:auto; display:flex; gap:8px;">
             <button id="authCancelBtn" class="btn btn-outline">Cancelar</button>
             <button id="authPinSubmitBtn" class="btn btn-primary">
@@ -556,6 +575,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js?v=3"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js?v=3"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js?v=3"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
