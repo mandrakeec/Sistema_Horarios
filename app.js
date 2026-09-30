@@ -116,7 +116,7 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
         // Modo fijo: el ciclo repite igual para siempre.
         // Modo mensual: cada mes calendario reinicia y se planifica por semanas.
         monthMode:  false,
-        monthChecks: [true, true, true, true],
+        monthChecks: [true, true, true, true, true],
         // pattern[personIdx][dayInCycle] = shiftId | null (libre)
         pattern: [
           [shMorning, shMorning, shAfternoon, shAfternoon, shNight, shNight, null, null],
@@ -144,7 +144,7 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
         { id: shNight,     name: 'Noche',   start: '23:00', end: '07:00', color: '#60a5fa' },
       ],
       staff:    { primary: [], external: [] },
-      rotation: { cycleLength: 8, baseDateStr: '2026-09-01', monthMode: false, monthChecks: [true, true, true, true], pattern: [] }
+      rotation: { cycleLength: 8, baseDateStr: '2026-09-01', monthMode: false, monthChecks: [true, true, true, true, true], pattern: [] }
     };
   }
 
@@ -296,8 +296,18 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
       if (cfg.rotation.baseDateStr) state.rotation.baseDateStr = cfg.rotation.baseDateStr;
       if (Array.isArray(cfg.rotation.pattern)) state.rotation.pattern = cfg.rotation.pattern;
       if (typeof cfg.rotation.monthMode === 'boolean') state.rotation.monthMode = cfg.rotation.monthMode;
-      if (Array.isArray(cfg.rotation.monthChecks) && cfg.rotation.monthChecks.length === 4) {
-        state.rotation.monthChecks = cfg.rotation.monthChecks.slice();
+      if (Array.isArray(cfg.rotation.monthChecks) && cfg.rotation.monthChecks.length >= 4) {
+        state.rotation.monthChecks = cfg.rotation.monthChecks.slice(0, 5);
+        // Migración v3 → v4: antes solo existían 4 semanas (28 días) y los días
+        // 29-31 repetían el 22-24. Se agrega la Semana 5 (29-31) marcada y con
+        // esos 3 días copiados del 22-24, para que el horario NO cambie.
+        if (state.rotation.monthChecks.length === 4) {
+          state.rotation.monthChecks.push(true);
+          state.rotation.pattern.forEach(row => {
+            [28, 29, 30].forEach((col, k) => { row[col] = row[21 + k]; });
+          });
+        }
+        while (state.rotation.monthChecks.length < 5) state.rotation.monthChecks.push(true);
       }
     }
     // Make sure pattern has right number of rows and columns
@@ -309,10 +319,10 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
    */
   /**
    * Ancho de cada fila del patrón según el modo:
-   * fijo = días del ciclo; mensual = 4 semanas (28 días del mes calendario).
+   * fijo = días del ciclo; mensual = 4 semanas + días 29-31 (31 columnas).
    */
   function patternWidth() {
-    return state.rotation.monthMode ? 28 : state.rotation.cycleLength;
+    return state.rotation.monthMode ? 31 : state.rotation.cycleLength;
   }
 
   function normalizePattern() {
@@ -678,11 +688,12 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
   // ==========================================
   /**
    * Semanas marcadas como "manuales" (fuente del modelo mensual).
+   * 0..3 = Semanas 1-4 (días 1-28); 4 = Semana 5 (días 29-31).
    * Si no hay ninguna, el modelo copia la Semana 1.
    */
   function getManualWeeks() {
-    const checks = state.rotation.monthChecks && state.rotation.monthChecks.length === 4
-      ? state.rotation.monthChecks : [true, true, true, true];
+    const checks = state.rotation.monthChecks && state.rotation.monthChecks.length >= 4
+      ? state.rotation.monthChecks : [true, true, true, true, true];
     const manual = [];
     checks.forEach((c, w) => { if (c) manual.push(w); });
     if (manual.length === 0) manual.push(0);
@@ -690,15 +701,23 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
   }
 
   /**
-   * Columna del patrón (0..27) que corresponde a un día del mes (1..31)
+   * Columna del patrón (0..30) que corresponde a un día del mes (1..31)
    * en modo mensual. Cada semana marcada corresponde a su propia semana del
    * mes; las semanas NO marcadas salen libres (null) y no se repiten.
+   * Días 29-31 usan la Semana 5 (columnas 28-30).
    */
   function monthSourceColumn(dayOfMonth) {
     const manual = getManualWeeks();
-    const week = Math.min(3, Math.floor((dayOfMonth - 1) / 7)); // 0..3
+    let week, offset;
+    if (dayOfMonth <= 28) {
+      week = Math.floor((dayOfMonth - 1) / 7);  // 0..3
+      offset = (dayOfMonth - 1) % 7;
+    } else {
+      week = 4;                                  // Semana 5
+      offset = dayOfMonth - 29;                  // 0..2
+    }
     if (manual.indexOf(week) === -1) return null; // semana no marcada → libre
-    return week * 7 + ((dayOfMonth - 1) % 7);
+    return week * 7 + offset;
   }
 
   /**
@@ -1837,13 +1856,14 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     const columns = [];
     if (monthMode) {
       getManualWeeks().forEach((w, wi) => {
-        for (let k = 0; k < 7; k++) {
-          columns.push({ col: w * 7 + k, band: wi > 0 });
+        const days = w === 4 ? 3 : 7; // Semana 5 = días 29-31
+        for (let k = 0; k < days; k++) {
+          columns.push({ col: w * 7 + k, band: wi > 0, dayNum: w * 7 + k + 1 });
         }
       });
     } else {
       const cycleLen = state.rotation.cycleLength;
-      for (let c = 0; c < cycleLen; c++) columns.push({ col: c, band: false });
+      for (let c = 0; c < cycleLen; c++) columns.push({ col: c, band: false, dayNum: c + 1 });
     }
 
     // Build table
@@ -1853,7 +1873,8 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     html += `<thead><tr><th class="rot-person-head">Personal</th>`;
     columns.forEach(col => {
       const cls = col.band ? 'rot-day-head rot-week-band-start' : 'rot-day-head';
-      html += `<th class="${cls}">Día ${col.col + 1}</th>`;
+      const label = monthMode ? String(col.dayNum) : `Día ${col.col + 1}`;
+      html += `<th class="${cls}">${label}</th>`;
     });
     html += `</tr></thead><tbody>`;
 
@@ -1898,8 +1919,8 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
   function syncMonthChecksUI() {
     const wrap = document.getElementById('monthWeekChecks');
     if (!wrap) return;
-    const checks = state.rotation.monthChecks && state.rotation.monthChecks.length === 4
-      ? state.rotation.monthChecks : [true, true, true, true];
+    const checks = state.rotation.monthChecks && state.rotation.monthChecks.length >= 5
+      ? state.rotation.monthChecks : [true, true, true, true, true];
     wrap.querySelectorAll('input[data-week]').forEach(cb => {
       const w = parseInt(cb.dataset.week, 10);
       cb.checked = !!checks[w];
@@ -1909,9 +1930,9 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     const hint = document.getElementById('monthModelHint');
     if (hint) {
       const manual = getManualWeeks();
-      hint.textContent = manual.length === 4
-        ? 'Semana 1 a 4 marcadas: cada semana es distinta y se planifica a mano.'
-        : `Marcadas: Semana ${manual.map(w => 'S' + (w + 1)).join(', ')}. Las semanas sin marcar salen libres.`;
+      hint.textContent = manual.length === 5
+        ? 'Semana 1 a 5 marcadas: cada semana es distinta y se planifica a mano (días 29-31 = Semana 5).'
+        : `Marcadas: Semana ${manual.map(w => w === 4 ? 'S5 (29-31)' : 'S' + (w + 1)).join(', ')}. Las semanas sin marcar salen libres.`;
     }
   }
 
@@ -1923,20 +1944,29 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
     if (monthMode === state.rotation.monthMode) return;
     state.rotation.monthMode = monthMode;
     if (monthMode) {
-      // Resolver ancho de filas a 28 días (4 semanas)
+      // Resolver ancho de filas a 31 días (4 semanas + días 29-31)
       state.rotation.pattern.forEach(row => {
-        while (row.length < 28) row.push(null);
-        row.length = 28;
+        while (row.length < 31) row.push(null);
+        row.length = 31;
       });
+
+      // Días 29-31 heredan el 22-24 → el horario queda igual que antes de
+      // agregar la Semana 5, pero ahora son editables por separado.
+      state.rotation.pattern.forEach(row => {
+        [28, 29, 30].forEach((col, k) => { if (row[col] == null) row[col] = row[21 + k]; });
+      });
+
+      if (!Array.isArray(state.rotation.monthChecks) || state.rotation.monthChecks.length < 5) {
+        state.rotation.monthChecks = [true, true, true, true, true];
+      }
 
       // Primera vez (checks aún en el default "todas marcadas"):
       // arrancar con SOLO la Semana 1 marcada. Las semanas sin marcar salen
       // libres; el usuario marca las que quiere planificar.
-      const isDefaultChecks = state.rotation.monthChecks &&
-        state.rotation.monthChecks.length === 4 &&
+      const isDefaultChecks = state.rotation.monthChecks.length === 5 &&
         state.rotation.monthChecks.every(Boolean);
       if (isDefaultChecks) {
-        state.rotation.monthChecks = [true, false, false, false];
+        state.rotation.monthChecks = [true, false, false, false, false];
         showToast('Modo mensual: solo Semana 1 marcada. Marca las semanas a planificar (las demás salen libres).');
       } else {
         showToast('Modo mensual: plan por semanas del mes activado.');
@@ -2382,10 +2412,11 @@ const STORAGE_KEY       = 'univ_shift_planner_v3';
         const cb = e.target.closest('input[data-week]');
         if (!cb) return;
         const w = parseInt(cb.dataset.week, 10);
-        if (state.rotation.monthChecks && state.rotation.monthChecks.length === 4) {
-          state.rotation.monthChecks[w] = cb.checked;
-          renderRotationBuilder();
+        if (!Array.isArray(state.rotation.monthChecks) || state.rotation.monthChecks.length < 5) {
+          state.rotation.monthChecks = [true, true, true, true, true];
         }
+        state.rotation.monthChecks[w] = cb.checked;
+        renderRotationBuilder();
       });
     }
 
